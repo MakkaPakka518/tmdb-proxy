@@ -1,0 +1,8 @@
+name = "tmdb-proxy"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+# 可选：把 TMDB API Key 放在这里自动注入，客户端就不用在 query 里带 key 了。
+# 也支持在 Cloudflare 面板的 Worker -> 设置 -> 变量 里添加同名环境变量。
+# [vars]
+# TMDB_API_KEY = "你的TMDB API Key"
