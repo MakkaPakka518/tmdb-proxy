@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>CineTrack Platinum</title>
+    <link rel="preconnect" href="https://api.themoviedb.org">
+    <link rel="preconnect" href="https://image.tmdb.org">
+    <link rel="preconnect" href="https://api.trakt.tv">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --anim-speed: 0.5s;
+            --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        /* --- 核心升级：液态玻璃变量 --- */
+        .theme-dark {
+            --bg-color: #0f0c29; --text-main: #ffffff; --text-sub: rgba(255, 255, 255, 0.6);
+            /* 暗黑模式：极低透明度 + 高饱和度背景 = 液态感 */
+            --glass-bg: rgba(20, 20, 35, 0.45); 
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-highlight: rgba(255, 255, 255, 0.15); /* 边缘高光 */
+            --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            --btn-bg: rgba(255, 255, 255, 0.1); --input-bg: rgba(255, 255, 255, 0.08);
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --header-bg: #0f0c29; --overlay-bg: #0f0c29;
+        }
+        .theme-light {
+            --bg-color: #f2f2f7; --text-main: #000000; --text-sub: rgba(0, 0, 0, 0.6);
+            /* 白天模式：像冰块一样的通透感 */
+            --glass-bg: rgba(255, 255, 255, 0.55); 
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-highlight: rgba(255, 255, 255, 0.8);
+            --glass-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+            --btn-bg: rgba(0, 0, 0, 0.05); --input-bg: rgba(0, 0, 0, 0.05);
+            --card-bg: rgba(0, 0, 0, 0.05);
+            --header-bg: #f2f2f7; --overlay-bg: #f2f2f7;
+        }
+
+        html, body { margin: 0; padding: 0; min-height: 100dvh; color: var(--text-main); background-color: var(--bg-color); transition: background-color 0.5s ease, color 0.5s ease; overscroll-behavior: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: pan-x pan-y; padding-top: env(safe-area-inset-top); font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+        img { pointer-events: none; -webkit-user-drag: none; }
+        /* 所有页面(含详情/各 overlay)统一禁用缩放、双击放大、右键、长按选择 */
+        .app-overlay, .app-overlay *, #search-overlay, #search-overlay *, #video-player-modal, #video-player-modal *, #login-modal, #login-modal * {
+            touch-action: pan-x pan-y;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        
+        /* 动态流动背景 (增强液态感) */
+        .theme-dark .spatial-bg { position: fixed; inset: 0; z-index: -1; background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #141e30); background-size: 400% 400%; animation: gradientFlow 15s ease infinite; opacity: 1; pointer-events: none; }
+        .theme-light .spatial-bg { position: fixed; inset: 0; z-index: -1; background: #f2f2f7; opacity: 1; pointer-events: none; }
+        @keyframes gradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        
+        header { position: relative; z-index: 500; }
+        .user-avatar-btn, #theme-btn, #magic-btn { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--btn-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; transition: transform 0.2s; cursor: pointer; color: var(--text-main); }
+        .user-avatar-btn:active, #theme-btn:active, #magic-btn:active { transform: scale(0.92); }
+        .status-dot { position: absolute; bottom: 2px; right: 2px; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; border: 1.5px solid var(--bg-color); display: none; }
+        .user-avatar-btn.logged-in .status-dot { display: block; }
+        .type-toggle { display: flex; background: var(--btn-bg); backdrop-filter: blur(20px); border-radius: 100px; padding: 3px; border: 1px solid var(--glass-border); }
+        .toggle-btn { padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; color: var(--text-sub); transition: all 0.3s var(--ease-spring); }
+        .toggle-btn.active { background: var(--text-main); color: var(--bg-color); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        #search-trigger { flex: 1; height: 36px; margin: 0 8px; background: var(--input-bg); border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--text-sub); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); cursor: pointer; transition: 0.2s; }
+        #search-trigger:active { opacity: 0.8; background: var(--glass-border); }
+        #main-container { transition: transform 0.5s var(--ease-out), opacity 0.5s ease; transform-origin: center 30vh; }
+        body.detail-open #main-container { transform: scale(0.95) translateX(-5%); opacity: 0.5; pointer-events: none; }
+        
+        .app-overlay { position: fixed; inset: 0; background: var(--overlay-bg); overflow-y: auto; overflow-x: hidden; opacity: 0; pointer-events: none; visibility: hidden; transform: translateX(100%); transition: transform var(--anim-speed) var(--ease-out), opacity 0.3s ease, visibility 0s 0.5s; box-shadow: -10px 0 30px rgba(0,0,0,0.3); }
+        .app-overlay.active { opacity: 1; pointer-events: auto; visibility: visible; transform: translateX(0); transition: transform var(--anim-speed) var(--ease-out), opacity 0.3s ease, visibility 0s; }
+        .app-overlay.dragging { transition: none !important; }
+        
+        #rec-overlay, #stats-overlay { z-index: 300; } 
+        #detail-overlay { z-index: 350; } 
+        #search-overlay { z-index: 600; }
+        #list-select-overlay { z-index: 450; background: var(--overlay-bg) !important; transform: translateX(100%); transition: transform 0.3s var(--ease-out), opacity 0.3s; }
+        #list-select-overlay.active { transform: translateX(0); }
+        
+        #video-player-modal { z-index: 500; position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s; transform: scale(0.9); }
+        #video-player-modal.active { opacity: 1; pointer-events: auto; transform: scale(1); }
+        .close-video-btn { position: absolute; top: calc(20px + env(safe-area-inset-top)); right: 20px; z-index: 510; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: #fff; }
+        
+        .detail-top-bar { position: fixed; top: 0; left: 0; width: 100%; height: calc(64px + env(safe-area-inset-top)); background-color: var(--header-bg); z-index: 355; transition: background-color 0.5s ease; border-bottom: 1px solid var(--glass-border); }
+        #detail-container { padding-top: calc(64px + env(safe-area-inset-top)); }
+        .video-background { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 0; opacity: 0; transition: opacity 1.5s ease; transform: scale(1.3); }
+        .video-background.playing { opacity: 0.6; }
+        .detail-hero-wrapper { opacity: 0; transition: opacity 0.5s 0.2s ease; } .app-overlay.active .detail-hero-wrapper { opacity: 1; }
+        .detail-content { transform: translateY(20px); opacity: 0; transition: all 0.5s 0.3s var(--ease-out); } .app-overlay.active .detail-content { transform: translateY(0); opacity: 1; }
+        .overlay-nav-btn { position: fixed; top: calc(12px + env(safe-area-inset-top)); width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.3); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.1); opacity: 0; transform: scale(0.5); transition: all 0.4s 0.3s var(--ease-spring); z-index: 360; color: #fff; }
+        .app-overlay.active .overlay-nav-btn { opacity: 1; transform: scale(1); }
+        .btn-right { right: 20px; } .btn-left { left: 20px; } 
+        .fs-btn { position: absolute; bottom: 20px; right: 20px; z-index: 50; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; color: white; transition: 0.2s; opacity: 0; transform: scale(0.8); }
+        .detail-hero-wrapper:hover .fs-btn, .video-background.playing ~ .fs-btn { opacity: 1; transform: scale(1); }
+        
+        .stats-grid { display: grid; grid-cols-2 gap-3; margin-top: 10px; }
+        .stat-card { background: var(--card-bg); padding: 15px; border-radius: 16px; border: 1px solid var(--glass-border); text-align: center; }
+        .stat-value { font-size: 20px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; }
+        .stat-label { font-size: 11px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; }
+        .h-list-section { margin-top: 24px; padding-left: 20px; }
+        .h-list-title { font-size: 13px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .h-list-scroll { display: flex; gap: 10px; overflow-x: auto; padding-right: 20px; padding-bottom: 10px; }
+        .h-card { width: 95px; flex-shrink: 0; display:flex; flex-direction:column; }
+        .h-card-img { aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; background: var(--card-bg); margin-bottom: 4px; position: relative; }
+        .h-card-img img { width: 100%; height: 100%; object-fit: cover; }
+        .h-card-meta { display:flex; flex-direction:column; gap:1px; }
+        .h-card-title { font-size: 10px; color: var(--text-main); font-weight:700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .h-card-subtitle { font-size: 9px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: -0.3px; }
+        
+        .manager-card { position: relative; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; background: var(--card-bg); }
+        .manager-card img { width: 100%; height: 100%; object-fit: cover; }
+        .manager-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.6), transparent); padding: 24px 6px 6px; pointer-events: none; }
+        .manager-title { font-size: 11px; font-weight: 700; color: #fff; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-shadow: 0 1px 2px black; }
+        .manager-subtitle { font-size: 9px; color: rgba(255,255,255,0.7); margin-top: 2px; font-family: ui-monospace, monospace; }
+        
+        .list-card { width: 140px; aspect-ratio: 16/9; border-radius: 12px; background: var(--btn-bg); border: 1px solid var(--glass-border); flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .list-card:active { transform: scale(0.95); background: var(--card-bg); }
+        .list-count { font-size: 20px; font-weight: 800; color: var(--text-main); }
+        .list-name { font-size: 11px; color: var(--text-sub); margin-top: 4px; line-clamp: 2; }
+        .item-delete-btn { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(220, 38, 38, 0.95); display: flex; align-items: center; justify-content: center; color: white; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.3); }
+        .item-delete-btn:active { transform: scale(0.9); }
+        
+        .list-select-content { 
+            padding-top: calc(64px + env(safe-area-inset-top));
+            padding-bottom: 24px;
+            max-height: 100vh; overflow-y: auto; 
+        }
+        .select-item { 
+            padding: 20px; border-bottom: 1px solid var(--glass-border); 
+            font-weight: 600; font-size: 16px; color: var(--text-main); 
+            display: flex; justify-content: space-between; align-items: center; 
+        }
+        .select-item:active { background: var(--btn-bg); }
+        
+        .provider-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+        .provider-icon { width: 40px; height: 40px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+        
+        /* === ⚠️ 关键修改：原生 iOS 液态玻璃 Docker === */
+        .nav-capsule { 
+            position: fixed; 
+            bottom: calc(4px + env(safe-area-inset-bottom)); 
+            left: 50%; 
+            transform: translateX(-50%); 
+            height: 64px; 
+            
+            /* 液态玻璃核心属性 */
+            background: var(--glass-bg); 
+            /* 重点：高模糊 + 高饱和度 (saturate 200% 是原生感的关键) */
+            backdrop-filter: blur(35px) saturate(220%); 
+            -webkit-backdrop-filter: blur(35px) saturate(220%);
+            
+            /* 模拟物理玻璃切割边缘 */
+            border-radius: 100px; 
+            box-shadow: 
+                var(--glass-shadow), 
+                inset 0 0.5px 0 0 var(--glass-highlight), /* 顶部高光 */
+                inset 0 0 0 1px var(--glass-border); /* 极细内边框 */
+            
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 5px; 
+            z-index: 100; 
+            width: auto; 
+            min-width: 170px; 
+            max-width: calc(100vw - 32px); 
+            transition: all 0.6s var(--ease-spring); 
+        }
+
+        .nav-inner { display: flex; align-items: center; gap: 4px; height: 100%; position: relative; overflow: hidden; }
+        
+        .nav-btn { height: 52px; border-radius: 40px; font-size: 15px; font-weight: 700; color: var(--text-sub); display: flex; align-items: center; justify-content: center; transition: all 0.4s ease; white-space: nowrap; position: relative; z-index: 2; }
+        
+        /* 选中态优化：悬浮感 */
+        .nav-btn.active { 
+            background: var(--text-main); 
+            color: var(--bg-color); 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
+        }
+        .theme-dark .nav-btn.active { 
+            background: #fff; 
+            color: #000; 
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4); 
+        }
+        
+        .theme-dark .nav-btn.active span.text { background: linear-gradient(135deg, #2563eb, #9333ea); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: inline-block; }
+        .theme-light .nav-btn.active { background: #000; color: #fff; }
+        
+        #btn-trend, #btn-chart { width: 84px; } #btn-trend .icon-only { display: none; }
+        .v-divider { width: 1px; height: 18px; background: var(--text-sub); opacity: 0.2; margin: 0 4px; transition: 0.3s; }
+        .provider-group { display: flex; max-width: 0; opacity: 0; overflow: hidden; transition: all 0.5s var(--ease-quart); align-items: center; gap: 8px; }
+        
+        body.mode-charts .nav-capsule { width: calc(100vw - 32px); justify-content: space-between; padding: 5px 8px; }
+        body.mode-charts #btn-chart { width: 0; padding: 0; opacity: 0; margin: 0; }
+        body.mode-charts #btn-trend { width: 52px; height: 52px; border-radius: 50%; background: var(--btn-bg); color: var(--text-main); box-shadow: none; }
+        body.mode-charts #btn-trend span.text { display: none; }
+        body.mode-charts #btn-trend .icon-only { display: block; font-size: 22px; }
+        body.mode-charts .v-divider { width: 0; margin: 0; opacity: 0; }
+        body.mode-charts .provider-group { max-width: 300px; opacity: 1; flex: 1; justify-content: flex-end; padding-right: 2px; }
+        
+        .provider-btn { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; opacity: 0.5; transform: scale(0.9); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); flex-shrink: 0; border: 2px solid transparent; }
+        body.mode-charts .provider-btn.active { opacity: 1; transform: scale(1.1); border-color: var(--text-main); z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        
+        .back-to-top { position: fixed; bottom: 100px; right: 20px; width: 44px; height: 44px; border-radius: 50%; background: var(--btn-bg); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); color: var(--text-main); display: flex; align-items: center; justify-content: center; z-index: 90; opacity: 0; pointer-events: none; transform: translateY(20px); transition: all 0.4s var(--ease-spring); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .back-to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        #search-overlay { position: fixed; inset: 0; z-index: 600; background: var(--bg-color); opacity: 0; pointer-events: none; transition: opacity 0.3s; padding-top: calc(20px + env(safe-area-inset-top)); }
+        .theme-dark #search-overlay { background: rgba(0,0,0,0.9); backdrop-filter: blur(30px); }
+        .theme-light #search-overlay { background: rgba(255,255,255,0.9); backdrop-filter: blur(30px); }
+        #search-overlay.active { opacity: 1; pointer-events: auto; }
+        #search-input { width: 100%; background: transparent; border: none; outline: none; color: var(--text-main); font-size: 20px; font-weight: 600; padding: 20px; border-bottom: 1px solid var(--glass-border); }
+        .login-modal { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.8); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .login-modal.active { opacity: 1; pointer-events: auto; }
+        .login-card { background: #1c1c1e; width: 85%; max-width: 320px; border-radius: 24px; padding: 24px; text-align: center; border: 1px solid rgba(255,255,255,0.1); color: #fff; }
+        #toast { position: fixed; top: 12px; left: 50%; transform: translateX(-50%) translateY(-100px); background: var(--text-main); backdrop-filter: blur(20px); color: var(--bg-color); padding: 12px 24px; border-radius: 100px; font-weight: 600; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 600; transition: transform 0.5s var(--ease-spring); display: flex; align-items: center; gap: 8px; }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        .grid-item-title { position: absolute; bottom: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); color: #fff; font-size: 10px; padding: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rec-grid { display: grid; grid-cols-3 sm:grid-cols-5 gap-3; padding: 0 20px; }
+        .rec-card { aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; position: relative; background: var(--card-bg); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); transform-style: preserve-3d; }
+        .rec-card.swapping { transform: rotateY(90deg) scale(0.8); opacity: 0; }
+        .rec-card img { width: 100%; height: 100%; object-fit: cover; }
+        .rec-section-title { font-size: 13px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; padding: 0 20px; }
+        /* 长列表渲染性能：跳过视口外海报的布局/绘制 */
+        #grid > * { content-visibility: auto; contain-intrinsic-size: 190px; }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+    </style>
+</head>
+<body>
+    <div class="spatial-bg"></div>
+    <div id="toast"><svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span id="toast-msg">Success</span></div>
+
+    <div id="main-container">
+        <header class="px-5 pt-6 pb-2 flex justify-between items-center relative gap-2">
+            <div id="user-btn" class="user-avatar-btn flex-shrink-0" onclick="Trakt.handleUserClick()"><svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div class="status-dot"></div></div>
+            <div id="theme-btn" onclick="Theme.toggle()"></div>
+            <div id="magic-btn" onclick="Recs.open()"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg></div>
+            <div id="hist-btn" class="user-avatar-btn flex-shrink-0" onclick="location.href='/web'" title="反代历史：查看浏览过的剧"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+            <div id="search-trigger" onclick="Search.open()"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><span>Search...</span></div>
+            <div class="type-toggle flex-shrink-0"><button onclick="setType('movie')" id="t-movie" class="toggle-btn active">Movie</button><button onclick="setType('tv')" id="t-tv" class="toggle-btn">TV</button></div>
+        </header>
+        <main class="px-2 pt-2 pb-36">
+            <div id="grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+            <div id="loading" class="py-12 flex justify-center opacity-0 transition-opacity"><div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div></div>
+        </main>
+    </div>
+
+    <div id="rec-overlay" class="app-overlay hide-scroll">
+        <button onclick="Recs.close()" class="overlay-nav-btn btn-right"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        <div id="rec-content-container">
+            <div id="rec-header-area"><div><h2 class="rec-title">今天看什么</h2><div class="text-[10px] opacity-50">Based on your history</div></div><button onclick="Recs.refreshAll()" class="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center border border-white/10 active:scale-90 transition-transform"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button></div>
+            <div id="rec-auth-msg" class="hidden flex-col items-center justify-center h-64 text-center"><p class="opacity-60 mb-4">请先登录 Trakt 获取个性化推荐</p><button onclick="Trakt.startDeviceFlow()" class="px-6 py-2 bg-[#ed1c24] rounded-full font-bold text-sm text-white">去登录</button></div>
+            <div id="rec-list" class="pb-32"><div class="rec-section-title"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> Movies</div><div id="rec-grid-movie" class="rec-grid mb-8"></div><div class="rec-section-title"><span class="w-2 h-2 rounded-full bg-blue-500"></span> TV Shows</div><div id="rec-grid-tv" class="rec-grid"></div></div>
+        </div>
+    </div>
+
+    <div id="stats-overlay" class="app-overlay hide-scroll"><button onclick="Stats.close()" class="overlay-nav-btn btn-right"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button><div id="stats-content" class="min-h-screen relative p-6 pt-24 text-main"></div></div>
+
+    <div id="list-select-overlay" class="app-overlay hide-scroll">
+        <div class="detail-top-bar"></div>
+        <button onclick="Trakt.closeListModal()" class="overlay-nav-btn btn-right"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        <div class="list-select-content">
+            <div class="text-xl font-bold mb-4 px-4" style="color:var(--text-main)">添加到片单</div>
+            <div id="user-lists-container"></div>
+        </div>
+    </div>
+
+    <div id="search-overlay"><div class="flex items-center px-2"><input type="text" id="search-input" placeholder="搜索..." autocomplete="off"><button onclick="Search.close()" class="px-4 py-2 opacity-60 font-bold text-sm">取消</button></div><div id="search-results" class="p-2 grid grid-cols-3 gap-2 overflow-y-auto h-[calc(100vh-80px)] pb-20"></div></div>
+
+    <div id="detail-overlay" class="app-overlay hide-scroll"><div class="detail-top-bar"></div><button onclick="goBack()" id="btn-back" class="overlay-nav-btn btn-left"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg></button><button onclick="closeDetail()" id="btn-close" class="overlay-nav-btn btn-right"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button><div id="detail-container" class="min-h-screen relative pb-20"></div></div>
+
+    <div id="video-player-modal"><button onclick="closeVideoModal()" class="close-video-btn"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button><div id="video-container" class="w-full aspect-video max-w-4xl bg-black"></div></div>
+
+    <div id="login-modal" class="login-modal"><div class="login-card"><h2 class="text-xl font-bold mb-2">Trakt 登录</h2><p class="text-white/60 text-sm mb-4">请访问 trakt.tv/activate 并输入代码</p><div id="device-code" class="text-3xl font-mono font-bold text-[#ed1c24] bg-white/5 p-4 rounded-lg my-4 tracking-widest">....</div><button onclick="Trakt.closeModal()" class="w-full bg-white/10 py-3 rounded-xl font-bold text-sm text-white">取消</button></div></div>
+
+    <button id="back-to-top" class="back-to-top" onclick="scrollToTop()"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg></button>
+
+    <nav class="nav-capsule"><div class="nav-inner"><button onclick="setMode('trending')" id="btn-trend" class="nav-btn active"><span class="text">热门</span><svg class="icon-only w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"></path></svg></button><div class="v-divider"></div><button onclick="setMode('charts')" id="btn-chart" class="nav-btn"><span class="text">榜单</span></button><div id="provider-group" class="provider-group"></div></div></nav>
+
+    <script>
+        const API_KEY = 'd913a144d0ba98fdca978f53a1ce27a5';
+        const BASE_URL = '/3'; // 由 tmdb-proxy Worker 托管时，TMDB 请求走本 Worker(同源，自动记录反代历史且大陆可用)；若单独部署到别处，改为你的反代域名如 https://tmdb.example.com/3
+        const IMG_URL = 'https://image.tmdb.org/t/p/w500';
+        const CARD_URL = 'https://image.tmdb.org/t/p/w342';
+        const ORIG_IMG_URL = 'https://image.tmdb.org/t/p/original';
+        const TRAKT_CLIENT_ID = '95b59922670c84040db3632c7aac6f33704f6ffe5cbf3113a056e37cb45cb482';
+        const TRAKT_CLIENT_SECRET = '5982b1e599762223af2afeed0294437284db8220aba1d70ff94df98fad2e9a93'; 
+        const TRAKT_API_URL = 'https://api.trakt.tv';
+
+        let state = { type: 'movie', mode: 'trending', provider: 'netflix', page: 1, loading: false, loadedIds: new Set() };
+        let historyStack = []; 
+        let currentView = null; 
+        let currentAddId = null; 
+        let currentAddType = null;
+
+        // 全站禁用：两指缩放(pinch)、双击放大、右键菜单、长按选择（含详情页/所有 overlay）
+        (function(){
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('gesturestart', e => e.preventDefault());
+            document.addEventListener('gesturechange', e => e.preventDefault());
+            document.addEventListener('gestureend', e => e.preventDefault());
+            document.addEventListener('touchmove', e => { if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
+        })();
+
+        const PROVIDERS = [
+            { id: 'netflix', name: 'N', color: '#E50914', pid: 8 },
+            { id: 'disney', name: 'D+', color: '#0063e5', pid: 337 },
+            { id: 'apple', name: 'TV+', color: '#ffffff', pid: 350 },
+            { id: 'hbo', name: 'Max', color: '#4d1bf5', pid: 1899 },
+            { id: 'chinese', name: '国', color: '#D4000F', pid: 'zh' }
+        ];
+
+        const Theme = {
+            current: localStorage.getItem('theme') || 'system',
+            icons: {
+                light: '<svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>',
+                dark: '<svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>',
+                system: '<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>'
+            },
+            init() {
+                this.apply(this.current);
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { if(this.current === 'system') this.apply('system'); });
+            },
+            toggle() {
+                const modes = ['system', 'light', 'dark'];
+                let idx = modes.indexOf(this.current);
+                this.current = modes[(idx + 1) % modes.length];
+                localStorage.setItem('theme', this.current);
+                this.apply(this.current);
+                showToast(`Theme: ${this.current.charAt(0).toUpperCase() + this.current.slice(1)}`);
+            },
+            apply(mode) {
+                const root = document.documentElement;
+                const btn = document.getElementById('theme-btn');
+                let isDark = false;
+                if (mode === 'system') isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                else isDark = (mode === 'dark');
+                if (isDark) { root.classList.add('theme-dark'); root.classList.remove('theme-light'); } 
+                else { root.classList.add('theme-light'); root.classList.remove('theme-dark'); }
+                if(btn) btn.innerHTML = this.icons[mode];
+            }
+        };
+
+        function formatDate(isoString) {
+            if(!isoString) return '';
+            const d = new Date(isoString);
+            const mon = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hr = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${mon}.${day}-${hr}.${min}`;
+        }
+
+        const SwipeHandler = {
+            startX: 0, startY: 0, currentOverlay: null, threshold: 0,
+            init() {
+                document.addEventListener('touchstart', e => this.start(e), {passive: true});
+                document.addEventListener('touchmove', e => this.move(e), {passive: false});
+                document.addEventListener('touchend', e => this.end(e), {passive: true});
+                this.threshold = window.innerWidth * 0.4;
+            },
+            start(e) {
+                this.startX = e.touches[0].screenX;
+                this.startY = e.touches[0].screenY;
+                if(document.getElementById('video-player-modal').classList.contains('active')) return;
+                if(document.getElementById('list-select-overlay').classList.contains('active')) this.currentOverlay = document.getElementById('list-select-overlay');
+                else if(document.getElementById('detail-overlay').classList.contains('active')) this.currentOverlay = document.getElementById('detail-overlay');
+                else if(document.getElementById('rec-overlay').classList.contains('active')) this.currentOverlay = document.getElementById('rec-overlay');
+                else if(document.getElementById('stats-overlay').classList.contains('active')) this.currentOverlay = document.getElementById('stats-overlay');
+                else this.currentOverlay = null;
+                if(this.currentOverlay) {
+                    const target = e.target;
+                    const scrollable = target.closest('.overflow-x-auto, .h-list-scroll');
+                    if(scrollable && scrollable.scrollLeft > 0) this.currentOverlay = null;
+                }
+            },
+            move(e) {
+                if(!this.currentOverlay) return;
+                const diffX = e.touches[0].screenX - this.startX;
+                const diffY = e.touches[0].screenY - this.startY;
+                if(diffX > 0 && Math.abs(diffX) > Math.abs(diffY)) {
+                    if(e.cancelable) e.preventDefault();
+                    this.currentOverlay.classList.add('dragging');
+                    this.currentOverlay.style.transform = `translateX(${diffX}px)`;
+                }
+            },
+            end(e) {
+                if(!this.currentOverlay) return;
+                const diffX = e.changedTouches[0].screenX - this.startX;
+                this.currentOverlay.classList.remove('dragging');
+                this.currentOverlay.style.transform = '';
+                if(diffX > this.threshold) {
+                    if(this.currentOverlay.id === 'list-select-overlay') Trakt.closeListModal();
+                    else if(this.currentOverlay.id === 'detail-overlay') goBack();
+                    else if(this.currentOverlay.id === 'rec-overlay') Recs.close();
+                    else if(this.currentOverlay.id === 'stats-overlay') Stats.close();
+                } 
+                this.currentOverlay = null;
+            }
+        };
+
+        const Stats = {
+            async open() {
+                if(!Trakt.token) { Trakt.startDeviceFlow(); return; }
+                const ol = document.getElementById('stats-overlay');
+                ol.classList.add('active');
+                document.body.classList.add('detail-open');
+                const container = document.getElementById('stats-content');
+                container.innerHTML = '<div class="text-center mt-20 opacity-50">正在加载数据...</div>';
+                try {
+                    const [profile, stats, lists] = await Promise.all([
+                        fetch(`${TRAKT_API_URL}/users/me?extended=full`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } }).then(r=>{if(r.status===401) throw '401'; return r.json()}),
+                        fetch(`${TRAKT_API_URL}/users/me/stats`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } }).then(r=>r.json()),
+                        fetch(`${TRAKT_API_URL}/users/me/lists`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } }).then(r=>r.json())
+                    ]);
+                    const fallback = `https://ui-avatars.com/api/?name=${profile.username}&background=random&color=fff&size=128`;
+                    const avatarSrc = profile.images?.avatar?.full || fallback;
+                    container.innerHTML = `<div id="stats-main-view"><div class="flex flex-col items-center mb-8"><div class="w-24 h-24 rounded-full overflow-hidden border-2 border-white/20 mb-4 shadow-xl"><img src="${avatarSrc}" onerror="this.src='${fallback}'" class="w-full h-full object-cover"></div><h2 class="text-2xl font-bold" style="color:var(--text-main)">${profile.username}</h2><p class="text-sm opacity-50" style="color:var(--text-sub)">加入于 ${new Date(profile.joined_at).getFullYear()}</p></div><div class="px-2"><h3 class="text-xs font-bold mb-3 uppercase tracking-widest opacity-40">观影生涯</h3><div class="stats-grid"><div class="stat-card"><div class="stat-value text-yellow-400">${Math.floor(stats.movies.minutes / 60)}h</div><div class="stat-label">电影时长</div></div><div class="stat-card"><div class="stat-value text-blue-400">${stats.movies.watched}</div><div class="stat-label">看过电影</div></div><div class="stat-card"><div class="stat-value text-green-400">${Math.floor(stats.episodes.minutes / 60)}h</div><div class="stat-label">剧集时长</div></div><div class="stat-card"><div class="stat-value text-purple-400">${stats.episodes.watched}</div><div class="stat-label">看过集数</div></div></div></div><div id="stats-lists-container" class="mt-8"><div class="text-center opacity-50 text-xs py-4">正在同步片单...</div></div><div class="mt-12 px-4 pb-12"><button onclick="Trakt.logout(); Stats.close()" class="w-full py-4 rounded-xl bg-white/10 border border-white/10 text-red-400 font-bold active:scale-95 transition-transform">退出登录</button></div></div>`;
+                    this.loadListsData(lists);
+                } catch(e) { 
+                    if(e === '401') { Trakt.logout(); Stats.close(); return; }
+                    container.innerHTML = '<div class="text-center mt-20 opacity-50">加载失败，请检查网络</div>'; 
+                }
+            },
+            async loadListsData(customLists) {
+                const container = document.getElementById('stats-lists-container');
+                if(!container) return;
+                try {
+                    const [history, watchlist] = await Promise.all([
+                        fetch(`${TRAKT_API_URL}/users/me/history?limit=10`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } }).then(r=>r.json()),
+                        fetch(`${TRAKT_API_URL}/users/me/watchlist?limit=10&sort=added,desc`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } }).then(r=>r.json())
+                    ]);
+                    const resolveImages = async (items) => {
+                        const results = [];
+                        for(const item of items) {
+                            let type = item.type;
+                            let tmdbId, displayTitle, displaySubtitle;
+                            let dateStr = formatDate(item.watched_at || item.listed_at);
+                            if (type === 'episode') { tmdbId = item.show.ids.tmdb; type = 'tv'; displaySubtitle = `S${String(item.episode.season).padStart(2,'0')}-E${String(item.episode.number).padStart(2,'0')} / ${dateStr}`; displayTitle = item.show.title; } 
+                            else { type = type === 'show' ? 'tv' : 'movie'; tmdbId = item[type === 'tv' ? 'show' : 'movie'].ids.tmdb; displaySubtitle = dateStr; displayTitle = item.movie ? item.movie.title : item.show.title; }
+                            if(!tmdbId) continue;
+                            try {
+                                const res = await fetch(`${BASE_URL}/${type}/${tmdbId}?api_key=${API_KEY}&language=zh-CN`);
+                                const data = await res.json();
+                                if(data.poster_path) results.push({ id: tmdbId, type: type, poster: CARD_URL+data.poster_path, title: data.title || data.name, subtitle: displaySubtitle });
+                            } catch(e){}
+                        }
+                        return results;
+                    };
+                    const [histItems, watchItems] = await Promise.all([resolveImages(history), resolveImages(watchlist)]);
+                    let html = '';
+                    if(histItems.length > 0) html += `<div class="h-list-section"><h4 class="h-list-title" onclick="Stats.openListDetail('history', '最近观看')">最近观看 <span class="text-xs opacity-50 ml-2 text-blue-400">点击管理 ></span></h4><div class="h-list-scroll hide-scroll">${histItems.map(i => `<div class="h-card" onclick="openDetail(${i.id}, '${i.poster.replace(CARD_URL,'')}', '', '${i.type}', true)"><div class="h-card-img"><img src="${i.poster}" loading="lazy" decoding="async" alt=""></div><div class="h-card-meta"><div class="h-card-title">${i.title}</div><div class="h-card-subtitle">${i.subtitle}</div></div></div>`).join('')}</div></div>`;
+                    if(watchItems.length > 0) html += `<div class="h-list-section"><h4 class="h-list-title" onclick="Stats.openListDetail('watchlist', '待看清单')">待看清单 <span class="text-xs opacity-50 ml-2 text-blue-400">点击管理 ></span></h4><div class="h-list-scroll hide-scroll">${watchItems.map(i => `<div class="h-card" onclick="openDetail(${i.id}, '${i.poster.replace(CARD_URL,'')}', '', '${i.type}', true)"><div class="h-card-img"><img src="${i.poster}" loading="lazy" decoding="async" alt=""></div><div class="h-card-meta"><div class="h-card-title">${i.title}</div><div class="h-card-subtitle">${i.subtitle}</div></div></div>`).join('')}</div></div>`;
+                    if(customLists.length > 0) html += `<div class="h-list-section"><h4 class="h-list-title">我的片单</h4><div class="h-list-scroll hide-scroll">${customLists.map(l => `<div class="list-card" onclick="Stats.openListDetail('${l.ids.trakt}', '${l.name.replace(/'/g, "\\'")}')"><div class="list-count">${l.item_count}</div><div class="list-name">${l.name}</div></div>`).join('')}</div></div>`;
+                    container.innerHTML = html;
+                } catch(e) { console.error(e); }
+            },
+            async openListDetail(listId, listName) {
+                const container = document.getElementById('stats-content');
+                document.getElementById('stats-main-view').style.display = 'none';
+                const detailId = `list-detail-${listId}`;
+                let detailEl = document.getElementById(detailId);
+                if(!detailEl) { detailEl = document.createElement('div'); detailEl.id = detailId; container.appendChild(detailEl); }
+                detailEl.style.display = 'block';
+                detailEl.innerHTML = `<div class="flex items-center mb-6"><button onclick="Stats.closeListDetail('${listId}')" class="mr-4 p-2 bg-white/10 rounded-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button><h2 class="text-xl font-bold truncate" style="color:var(--text-main)">${listName}</h2></div><div id="list-grid-${listId}" class="grid grid-cols-3 gap-3">Loading...</div>`;
+                try {
+                    let url = '';
+                    if(listId === 'watchlist') url = `${TRAKT_API_URL}/users/me/watchlist?extended=full&sort=added,desc`;
+                    else if(listId === 'history') url = `${TRAKT_API_URL}/users/me/history?extended=full&limit=100`;
+                    else url = `${TRAKT_API_URL}/users/me/lists/${listId}/items?extended=full`;
+                    const res = await fetch(url, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } });
+                    const items = await res.json();
+                    const gridEl = document.getElementById(`list-grid-${listId}`);
+                    gridEl.innerHTML = '';
+                    if(items.length === 0) gridEl.innerHTML = '<div class="col-span-3 text-center opacity-50 py-10">空空如也</div>';
+                    for(const item of items) {
+                        let type = item.type; let tmdbId, traktId, displaySubtitle;
+                        let dateStr = formatDate(item.watched_at || item.listed_at);
+                        if (type === 'episode') { tmdbId = item.show.ids.tmdb; traktId = item.episode.ids.trakt; type = 'tv'; displaySubtitle = `S${String(item.episode.season).padStart(2,'0')}-E${String(item.episode.number).padStart(2,'0')} / ${dateStr}`; } 
+                        else { type = type === 'show' ? 'tv' : 'movie'; tmdbId = item[type === 'tv' ? 'show' : 'movie'].ids.tmdb; traktId = item[type === 'tv' ? 'show' : 'movie'].ids.trakt; displaySubtitle = dateStr; }
+                        if(!tmdbId) continue;
+                        const itemEl = document.createElement('div');
+                        itemEl.className = 'manager-card relative';
+                        itemEl.innerHTML = `<div class="item-delete-btn" onclick="event.stopPropagation(); Trakt.removeFromList('${listId}', '${item.type}', ${traktId}, this.parentElement)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></div><img src="" class="opacity-50 transition-opacity duration-500"><div class="manager-overlay"><div class="manager-title">...</div><div class="manager-subtitle">${displaySubtitle}</div></div>`;
+                        itemEl.onclick = () => openDetail(tmdbId, '', '', type, true);
+                        gridEl.appendChild(itemEl);
+                        fetch(`${BASE_URL}/${type}/${tmdbId}?api_key=${API_KEY}&language=zh-CN`).then(r=>r.json()).then(d=>{ if(d.poster_path) itemEl.querySelector('img').src = CARD_URL + d.poster_path; itemEl.querySelector('.manager-title').innerText = d.title || d.name; itemEl.querySelector('img').classList.remove('opacity-50'); });
+                    }
+                } catch(e) { document.getElementById(`list-grid-${listId}`).innerHTML = 'Load failed'; }
+            },
+            closeListDetail(listId) { const detailEl = document.getElementById(`list-detail-${listId}`); if(detailEl) detailEl.remove(); document.getElementById('stats-main-view').style.display = 'block'; },
+            close() { document.getElementById('stats-overlay').classList.remove('active'); const container = document.getElementById('stats-content'); container.innerHTML = ''; if(!document.getElementById('detail-overlay').classList.contains('active') && !document.getElementById('rec-overlay').classList.contains('active')) { document.body.classList.remove('detail-open'); } }
+        };
+
+        const Trakt = {
+            token: localStorage.getItem('trakt_token'),
+            init() { if(this.token) this.loadProfile(); },
+            handleUserClick() { 
+                if (this.token) Stats.open();
+                else this.startDeviceFlow(); 
+            },
+            logout() {
+                this.token = null; localStorage.removeItem('trakt_token');
+                const btn = document.getElementById('user-btn'); btn.classList.remove('logged-in');
+                btn.innerHTML = '<svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div class="status-dot"></div>';
+                showToast('已退出');
+            },
+            async startDeviceFlow() {
+                document.getElementById('login-modal').classList.add('active');
+                const res = await fetch(`${TRAKT_API_URL}/oauth/device/code`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({client_id: TRAKT_CLIENT_ID}) });
+                const data = await res.json();
+                document.getElementById('device-code').innerText = data.user_code;
+                this.pollInterval = setInterval(async () => {
+                    const pollRes = await fetch(`${TRAKT_API_URL}/oauth/device/token`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ code: data.device_code, client_id: TRAKT_CLIENT_ID, client_secret: TRAKT_CLIENT_SECRET }) });
+                    if(pollRes.status === 200) {
+                        const tData = await pollRes.json();
+                        this.token = tData.access_token; localStorage.setItem('trakt_token', this.token);
+                        clearInterval(this.pollInterval); this.closeModal(); this.loadProfile();
+                        showToast('登录成功');
+                        if(document.getElementById('rec-overlay').classList.contains('active')) Recs.open();
+                    }
+                }, data.interval * 1000);
+            },
+            closeModal() { document.getElementById('login-modal').classList.remove('active'); if(this.pollInterval) clearInterval(this.pollInterval); },
+            async loadProfile() {
+                try {
+                    const res = await fetch(`${TRAKT_API_URL}/users/me?extended=full`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${this.token}` } });
+                    if(res.ok) {
+                        const u = await res.json();
+                        const fallback = `https://ui-avatars.com/api/?name=${u.username}&background=random&color=fff&bold=true`;
+                        const src = u.images?.avatar?.full || fallback;
+                        document.getElementById('user-btn').classList.add('logged-in');
+                        document.getElementById('user-btn').innerHTML = `<img src="${src}" onerror="this.src='${fallback}'"><div class="status-dot"></div>`;
+                    }
+                } catch(e){}
+            },
+            async addToWatchlist(id, type) { this.sync('/sync/watchlist', this.buildBody(id, type), '已加入待看'); },
+            async markWatched(id, type) { this.sync('/sync/history', this.buildBody(id, type), '已标记已看'); },
+            async openAddToListModal(id, type) {
+                if(!this.token) { this.startDeviceFlow(); return; }
+                currentAddId = id; currentAddType = type;
+                const modal = document.getElementById('list-select-overlay');
+                modal.classList.add('active');
+                const container = document.getElementById('user-lists-container');
+                container.innerHTML = '<div class="p-4 text-center opacity-50">获取列表中...</div>';
+                try {
+                    const res = await fetch(`${TRAKT_API_URL}/users/me/lists`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${this.token}` } });
+                    const lists = await res.json();
+                    container.innerHTML = lists.map(l => `<div class="select-item" onclick="Trakt.addToList('${l.ids.trakt}', '${l.name}')"><span>${l.name}</span><span class="opacity-50 text-xs">${l.item_count} items</span></div>`).join('');
+                } catch(e) { container.innerHTML = '获取失败'; }
+            },
+            closeListModal() { document.getElementById('list-select-overlay').classList.remove('active'); },
+            async addToList(listId, listName) {
+                this.closeListModal();
+                const body = this.buildBody(currentAddId, currentAddType);
+                try {
+                    await fetch(`${TRAKT_API_URL}/users/me/lists/${listId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${this.token}` }, body: JSON.stringify(body) });
+                    showToast(`已加入 ${listName}`);
+                } catch(e) { showToast('添加失败'); }
+            },
+            async removeFromList(listId, type, traktId, elToRemove) {
+                if(!confirm('确定从片单移除?')) return;
+                let body = {};
+                if (type === 'episode') body = { episodes: [{ ids: { trakt: traktId } }] };
+                else if (type === 'show') body = { shows: [{ ids: { trakt: traktId } }] };
+                else body = { movies: [{ ids: { trakt: traktId } }] };
+                let endpoint = '';
+                if(listId === 'watchlist') endpoint = '/sync/watchlist/remove';
+                else if(listId === 'history') endpoint = '/sync/history/remove';
+                else endpoint = `/users/me/lists/${listId}/items/remove`;
+                try {
+                    const res = await fetch(`${TRAKT_API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${this.token}` }, body: JSON.stringify(body) });
+                    if(res.ok) { elToRemove.style.transform = 'scale(0)'; setTimeout(() => elToRemove.remove(), 300); showToast('已移除'); } else { throw 'err'; }
+                } catch(e) { showToast('移除失败'); }
+            },
+            buildBody(id, type) { return type === 'movie' ? { movies: [{ ids: { tmdb: id } }] } : { shows: [{ ids: { tmdb: id } }] }; },
+            async sync(endpoint, body, successMsg) {
+                try {
+                    const res = await fetch(`${TRAKT_API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${this.token}` }, body: JSON.stringify(body) });
+                    if(res.ok) showToast(successMsg);
+                } catch(e) { showToast('操作失败'); }
+            }
+        };
+
+        const Recs = {
+            pool: { movie: [], tv: [] }, displayed: { movie: [], tv: [] },
+            open() {
+                const ol = document.getElementById('rec-overlay'); ol.classList.add('active'); document.body.classList.add('detail-open'); 
+                if(!Trakt.token) { document.getElementById('rec-auth-msg').classList.remove('hidden'); document.getElementById('rec-auth-msg').classList.add('flex'); document.getElementById('rec-list').classList.add('hidden'); } 
+                else { document.getElementById('rec-auth-msg').classList.add('hidden'); document.getElementById('rec-auth-msg').classList.remove('flex'); document.getElementById('rec-list').classList.remove('hidden'); if(this.pool.movie.length === 0) this.initData(); }
+            },
+            close() { document.getElementById('rec-overlay').classList.remove('active'); if(!document.getElementById('detail-overlay').classList.contains('active')){ document.body.classList.remove('detail-open'); } },
+            async initData() { showToast('正在生成推荐...'); await Promise.all([this.fetchPool('movies'), this.fetchPool('shows')]); this.refreshAll(false); },
+            async fetchPool(typeStr) { try { const res = await fetch(`${TRAKT_API_URL}/recommendations/${typeStr}?limit=50&ignore_collected=true`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` } }); const data = await res.json(); this.pool[typeStr === 'movies' ? 'movie' : 'tv'] = data.map(item => ({ id: item.ids.tmdb, title: item.title, type: typeStr === 'movies' ? 'movie' : 'tv' })); } catch(e) {} },
+            async refreshAll(animation = true) { if(animation) { document.querySelectorAll('.rec-card').forEach(c => c.classList.add('swapping')); await new Promise(r => setTimeout(r, 300)); } await Promise.all([this.fillSection('movie'), this.fillSection('tv')]); },
+            async fillSection(type) { const source = this.pool[type]; if(source.length < 5) return; const shuffled = [...source].sort(() => 0.5 - Math.random()); const picks = shuffled.slice(0, 5); this.displayed[type] = picks; const htmls = await Promise.all(picks.map((item, idx) => this.renderCard(item, idx))); document.getElementById(`rec-grid-${type}`).innerHTML = htmls.join(''); },
+            async replaceOne(type, idx, btnEl) { const card = btnEl.closest('.rec-card'); card.classList.add('swapping'); const currentIds = this.displayed[type].map(i => i.id); const candidates = this.pool[type].filter(i => !currentIds.includes(i.id)); if(candidates.length === 0) { showToast('没更多推荐了'); card.classList.remove('swapping'); return; } const newItem = candidates[Math.floor(Math.random() * candidates.length)]; this.displayed[type][idx] = newItem; setTimeout(async () => { const newHtml = await this.renderCard(newItem, idx); card.outerHTML = newHtml; }, 300); },
+            async renderCard(item, idx) { let img = ''; try { const res = await fetch(`${BASE_URL}/${item.type}/${item.id}?api_key=${API_KEY}&language=zh-CN`); const data = await res.json(); if(data.poster_path) img = CARD_URL + data.poster_path; } catch(e) {} if(!img) return ''; return `<div class="rec-card" onclick="openDetail(${item.id}, '${img.replace(CARD_URL,'')}', '', '${item.type}')"><img src="${img}" class="animate-fade-in" loading="lazy" decoding="async" alt=""><div class="mini-refresh-btn" onclick="event.stopPropagation(); Recs.replaceOne('${item.type}', ${idx}, this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></div></div>`; }
+        };
+
+        const Search = {
+            timer: null,
+            open() { document.getElementById('search-overlay').classList.add('active'); document.getElementById('search-input').focus(); },
+            close() { document.getElementById('search-overlay').classList.remove('active'); document.getElementById('search-input').value = ''; document.getElementById('search-results').innerHTML = ''; },
+            init() { document.getElementById('search-input').addEventListener('input', (e) => { clearTimeout(this.timer); if(e.target.value.length > 1) this.timer = setTimeout(() => this.execute(e.target.value), 500); }); },
+            async execute(query) {
+                const res = await fetch(`${BASE_URL}/search/multi?api_key=${API_KEY}&language=zh-CN&query=${query}`);
+                const data = await res.json();
+                document.getElementById('search-results').innerHTML = data.results.map(item => {
+                    if(!item.poster_path && !item.profile_path) return '';
+                    const img = item.poster_path || item.profile_path;
+                    const type = item.media_type;
+                    if(type === 'person') return `<div class="aspect-[2/3] rounded-lg overflow-hidden bg-white/10 relative" onclick="openActorDetail(${item.id}, '${item.name.replace(/'/g, "\\'")}', '${img}', true)"><img src="${CARD_URL + img}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt=""><div class="absolute bottom-0 w-full bg-black/60 text-[10px] p-1 text-center truncate text-white">${item.name}</div></div>`;
+                    else return `<div class="aspect-[2/3] rounded-lg overflow-hidden bg-white/10 relative" onclick="openDetail(${item.id}, '${img}', '${item.backdrop_path}', '${type}', true)"><img src="${CARD_URL + img}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt=""><div class="absolute bottom-0 w-full bg-black/60 text-[10px] p-1 text-center truncate text-white">${item.title || item.name}</div></div>`;
+                }).join('');
+            }
+        };
+
+        window.onload = () => {
+            try {
+                Theme.init();
+                Trakt.init();
+                Search.init();
+                SwipeHandler.init();
+                renderProviders();
+                setTimeout(() => loadData(), 500);
+            } catch(e) { console.error('Init error', e); }
+            window.addEventListener('scroll', () => { 
+                if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800) loadData();
+                const btn = document.getElementById('back-to-top');
+                if (window.scrollY > 500) btn.classList.add('show'); else btn.classList.remove('show');
+            });
+        };
+        
+        function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+        async function openDetail(id, posterPath, backdropPath, typeOverride, pushToStack = true) {
+            if (pushToStack && currentView) historyStack.push(currentView);
+            currentView = { view: 'content', id, posterPath, backdropPath, typeOverride };
+            const overlay = document.getElementById('detail-overlay'); 
+            const container = document.getElementById('detail-container');
+            const targetType = typeOverride || state.type;
+            const heroImage = (backdropPath && backdropPath !== 'null') ? (IMG_URL + backdropPath) : (IMG_URL + posterPath);
+            Search.close(); document.body.classList.add('detail-open'); overlay.scrollTop = 0; overlay.classList.add('active');
+            container.innerHTML = `<div class="detail-hero-wrapper w-full aspect-video bg-gray-900 relative overflow-hidden"><img src="${heroImage}" class="detail-hero-img absolute inset-0 w-full h-full object-cover opacity-60 blur-sm"><div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div></div><div class="px-5 pt-5 detail-content"><div class="h-8 w-3/4 bg-white/10 rounded mb-4 animate-pulse"></div></div>`;
+            try {
+                const [info, videos, credits, similar, providers] = await Promise.all([
+                    fetch(`${BASE_URL}/${targetType}/${id}?api_key=${API_KEY}&language=zh-CN`).then(r=>r.json()),
+                    fetch(`${BASE_URL}/${targetType}/${id}/videos?api_key=${API_KEY}`).then(r=>r.json()),
+                    fetch(`${BASE_URL}/${targetType}/${id}/credits?api_key=${API_KEY}&language=zh-CN`).then(r=>r.json()),
+                    fetch(`${BASE_URL}/${targetType}/${id}/recommendations?api_key=${API_KEY}&language=zh-CN`).then(r=>r.json()),
+                    fetch(`${BASE_URL}/${targetType}/${id}/watch/providers?api_key=${API_KEY}`).then(r=>r.json())
+                ]);
+                const finalBackdrop = info.backdrop_path ? (ORIG_IMG_URL + info.backdrop_path) : heroImage;
+                const hdImg = new Image(); hdImg.src = finalBackdrop;
+                hdImg.onload = () => { if(container.querySelector('.detail-hero-img')) container.querySelector('.detail-hero-img').src = finalBackdrop; };
+                const trailer = videos.results.find(v => v.type==='Trailer' && v.site==='YouTube');
+                let videoHtml = '';
+                if (trailer) { videoHtml = `<iframe src="https://www.youtube.com/embed/${trailer.key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailer.key}&playsinline=1&modestbranding=1&rel=0" class="video-background" onload="this.classList.add('playing')"></iframe><button class="fs-btn" onclick="playFullscreenTrailer('${trailer.key}')"><svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg></button>`; }
+                const cnProviders = providers.results?.CN?.flatrate || providers.results?.US?.flatrate || [];
+                const providerHtml = cnProviders.length > 0 ? `<div class="mb-6"><h3 class="text-xs font-bold mb-3 uppercase tracking-widest" style="color:var(--text-sub)">Where to Watch</h3><div class="provider-list">${cnProviders.map(p => `<div class="provider-icon"><img src="${CARD_URL + p.logo_path}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt=""></div>`).join('')}</div></div>` : '';
+                let seasonsHtml = '';
+                if(targetType === 'tv' && info.seasons) { seasonsHtml = `<div class="mb-8"><h3 class="text-xs font-bold mb-4 uppercase tracking-widest" style="color:var(--text-sub)">分季 (Seasons)</h3><div class="flex gap-3 overflow-x-auto hide-scroll pb-2">${info.seasons.filter(s => s.season_number > 0).map(s => `<div class="shrink-0 w-24 flex flex-col gap-2" onclick="loadEpisodes(${id}, ${s.season_number})"><div class="aspect-[2/3] rounded-lg overflow-hidden bg-white/10 relative">${s.poster_path ? `<img src="${CARD_URL+s.poster_path}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt="">` : '<div class="w-full h-full flex items-center justify-center text-xs">暂无</div>'}</div><span class="text-xs text-center opacity-70" style="color:var(--text-main)">${s.name}</span></div>`).join('')}</div><div id="episodes-area" class="mt-4 space-y-3"></div></div>`; }
+                const recHtml = similar.results.length > 0 ? `<div class="mb-8"><h3 class="text-xs font-bold mb-4 uppercase tracking-widest" style="color:var(--text-sub)">猜你喜欢</h3><div class="flex gap-3 overflow-x-auto hide-scroll pb-2 -mx-5 px-5">${similar.results.slice(0,10).map(m => `<div class="shrink-0 w-28 flex flex-col gap-2" onclick="openDetail(${m.id}, '${m.poster_path}', '${m.backdrop_path}', '${targetType}', true)"><div class="aspect-[2/3] rounded-lg overflow-hidden bg-white/10"><img src="${CARD_URL+m.poster_path}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt=""></div><span class="text-[10px] text-center opacity-60 truncate" style="color:var(--text-main)">${m.title||m.name}</span></div>`).join('')}</div></div>` : '';
+                const trailerUrl = trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
+                const year = (info.release_date || info.first_air_date || '').split('-')[0];
+                container.innerHTML = `<div class="detail-hero-wrapper w-full aspect-video bg-gray-900 relative shrink-0 overflow-hidden">${videoHtml}<img src="${finalBackdrop}" class="detail-hero-img absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-1000 ${trailer ? 'opacity-0 delay-1000' : ''}"><div class="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black z-20"></div><div class="absolute bottom-0 left-0 w-full p-6 pb-2 bg-gradient-to-t from-black via-black/80 to-transparent z-20"><h1 class="text-3xl font-extrabold text-white leading-tight mb-2 shadow-black drop-shadow-lg">${info.title || info.name}</h1><div class="flex items-center gap-3 text-xs font-semibold text-white/60 uppercase tracking-wide"><span class="bg-white/10 px-2 py-1 rounded text-white/90 border border-white/5">${year}</span><span>${info.genres?.[0]?.name}</span><span class="text-yellow-500 flex items-center gap-1">★ ${(info.vote_average).toFixed(1)}</span></div></div></div><div class="px-5 pt-5 pb-32 detail-content relative"><a href="rex://tmdb?id=${id}&type=${targetType}" onclick="event.stopPropagation()" class="block w-full mb-6 py-4 rounded-2xl text-center font-extrabold text-base text-white active:scale-[0.97] transition-transform" style="background:linear-gradient(135deg,#ed1c24,#ff7a45);box-shadow:0 10px 24px rgba(237,28,36,0.35)">▶ 在 Rex 观看</a><div class="flex gap-3 mb-6">${trailerUrl ? `<a href="${trailerUrl}" target="_blank" class="flex-1 bg-[var(--btn-bg)] text-[var(--text-main)] text-center py-3.5 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 border border-[var(--glass-border)]">预告</a>` : `<div class="flex-1 bg-[var(--btn-bg)] opacity-30 text-center py-3.5 rounded-xl font-bold text-sm border border-[var(--glass-border)]">暂无</div>`}<button onclick="Trakt.addToWatchlist(${id}, '${targetType}')" class="w-14 bg-[var(--btn-bg)] rounded-xl flex items-center justify-center border border-[var(--glass-border)] active:scale-95 transition-transform text-[var(--text-main)]"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></button><button onclick="Trakt.markWatched(${id}, '${targetType}')" class="w-14 bg-[var(--btn-bg)] rounded-xl flex items-center justify-center border border-[var(--glass-border)] active:scale-95 transition-transform text-green-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button onclick="Trakt.openAddToListModal(${id}, '${targetType}')" class="w-14 bg-[var(--btn-bg)] rounded-xl flex items-center justify-center border border-[var(--glass-border)] active:scale-95 transition-transform text-blue-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg></button></div>${providerHtml}<p class="text-[15px] leading-relaxed font-normal mb-8 opacity-80" style="color:var(--text-main)">${info.overview || '暂无简介'}</p>${seasonsHtml}<div class="mb-8"><h3 class="text-xs font-bold mb-4 uppercase tracking-widest" style="color:var(--text-sub)">Cast</h3><div class="flex gap-4 overflow-x-auto hide-scroll pb-4 -mx-5 px-5">${credits.cast.slice(0,8).map(c => `<div class="flex flex-col items-center w-16 shrink-0 gap-2" onclick="openActorDetail(${c.id}, '${c.name.replace(/'/g, "\\'")}', '${c.profile_path}', true)"><div class="w-14 h-14 rounded-full overflow-hidden bg-white/5 shadow-inner border border-white/5"><img src="${c.profile_path ? CARD_URL+c.profile_path : 'https://ui-avatars.com/api/?name='+c.name}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt=""></div><span class="text-[10px] opacity-50 text-center truncate w-full" style="color:var(--text-main)">${c.name}</span></div>`).join('')}</div></div>${recHtml}</div>`;
+            } catch(e) { console.error(e); }
+        }
+
+        function playFullscreenTrailer(key) { document.getElementById('video-container').innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${key}?autoplay=1&rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`; document.getElementById('video-player-modal').classList.add('active'); }
+        function closeVideoModal() { document.getElementById('video-container').innerHTML = ''; document.getElementById('video-player-modal').classList.remove('active'); }
+        async function openActorDetail(id, name, profilePath, pushToStack = true) { if (pushToStack && currentView) historyStack.push(currentView); currentView = { view: 'actor', id, name, profilePath }; const overlay = document.getElementById('detail-overlay'); const container = document.getElementById('detail-container'); Search.close(); document.body.classList.add('detail-open'); overlay.scrollTop = 0; overlay.classList.add('active'); const profileImg = profilePath && profilePath!=='null' ? IMG_URL+profilePath : `https://ui-avatars.com/api/?name=${name}`; container.innerHTML = `<div class="pt-24 px-6 flex flex-col items-center animate-pulse"><div class="w-32 h-32 rounded-full bg-white/10 mb-4"></div><div class="h-6 w-1/2 bg-white/10 rounded"></div></div>`; try { const res = await fetch(`${BASE_URL}/person/${id}/combined_credits?api_key=${API_KEY}&language=zh-CN`); const data = await res.json(); const personRes = await fetch(`${BASE_URL}/person/${id}?api_key=${API_KEY}&language=zh-CN`); const personData = await personRes.json(); const works = data.cast.filter(i => i.poster_path).sort((a,b) => b.popularity - a.popularity); container.innerHTML = `<div class="pt-24 px-6 pb-8 flex flex-col items-center detail-content"><div class="w-32 h-32 rounded-full overflow-hidden border-2 border-white/10 shadow-2xl mb-5"><img src="${profileImg}" class="w-full h-full object-cover"></div><h2 class="text-2xl font-bold text-center mb-2" style="color:var(--text-main)">${name}</h2><p class="text-xs opacity-50 text-center line-clamp-3 max-w-sm leading-relaxed" style="color:var(--text-main)">${personData.biography || '暂无简介'}</p></div><div class="px-2 pb-32"><h3 class="px-2 text-xs font-bold mb-4 uppercase tracking-widest" style="color:var(--text-sub)">Known For</h3><div class="grid grid-cols-3 sm:grid-cols-4 gap-2">${works.map(item => `<div class="aspect-[2/3] rounded-lg overflow-hidden bg-white/10 relative" onclick="openDetail(${item.id}, '${item.poster_path}', '${item.backdrop_path}', '${item.media_type}', true)"><img src="${CARD_URL + item.poster_path}" class="w-full h-full object-cover" loading="lazy" decoding="async"></div>`).join('')}</div></div>`; } catch(e) {} }
+        function goBack() { if (historyStack.length > 0) { const prev = historyStack.pop(); if (prev.view === 'actor') openActorDetail(prev.id, prev.name, prev.profilePath, false); else openDetail(prev.id, prev.posterPath, prev.backdropPath, prev.typeOverride, false); } else { closeDetail(); } }
+        function closeDetail() { historyStack = []; currentView = null; document.getElementById('detail-overlay').classList.remove('active'); if(!document.getElementById('rec-overlay').classList.contains('active') && !document.getElementById('stats-overlay').classList.contains('active')) { document.body.classList.remove('detail-open'); } setTimeout(() => { document.getElementById('detail-container').innerHTML = ''; }, 800); }
+        async function loadEpisodes(tvId, seasonNum) { const area = document.getElementById('episodes-area'); area.innerHTML = '<div class="text-center py-4 opacity-50">加载中...</div>'; try { const res = await fetch(`${BASE_URL}/tv/${tvId}/season/${seasonNum}?api_key=${API_KEY}&language=zh-CN`); const data = await res.json(); area.innerHTML = data.episodes.map(e => `<div class="flex gap-3 p-3 rounded-lg border border-[var(--glass-border)] bg-[var(--card-bg)]"><div class="w-24 shrink-0 aspect-video rounded overflow-hidden bg-black">${e.still_path ? `<img src="${CARD_URL+e.still_path}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt="">` : ''}</div><div class="flex-1 min-w-0 flex flex-col justify-center"><div class="flex justify-between items-baseline mb-1"><span class="text-sm font-bold truncate mr-2" style="color:var(--text-main)">${e.episode_number}. ${e.name}</span><span class="text-[10px] opacity-40" style="color:var(--text-main)">${e.air_date||''}</span></div><p class="text-[11px] opacity-60 line-clamp-2" style="color:var(--text-main)">${e.overview||'无简介'}</p></div></div>`).join(''); } catch(e) { area.innerHTML = '加载失败'; } }
+        function setType(t) { if(state.type===t) return; state.type=t; state.page=1; resetUI(); resetGrid(); }
+        function setMode(m) { if(state.mode===m) return; state.mode=m; state.page=1; const tB=document.getElementById('btn-trend'),cB=document.getElementById('btn-chart'); if(m==='charts'){ document.body.classList.add('mode-charts'); tB.classList.remove('active'); cB.classList.add('active'); } else { document.body.classList.remove('mode-charts'); tB.classList.add('active'); cB.classList.remove('active'); } resetGrid(); }
+        function setProvider(pid) { if(state.provider===pid) return; state.provider=pid; state.page=1; renderProviders(); resetGrid(); }
+        function resetUI() { document.getElementById('t-movie').className=state.type==='movie'?'toggle-btn active':'toggle-btn'; document.getElementById('t-tv').className=state.type==='tv'?'toggle-btn active':'toggle-btn'; }
+        function renderProviders() { document.getElementById('provider-group').innerHTML = PROVIDERS.map(p => `<button onclick="setProvider('${p.id}')" class="provider-btn ${state.provider===p.id?'active':''}" style="background:${p.color}; color:${p.color==='#ffffff'?'#000':'#fff'}">${p.name}</button>`).join(''); }
+        function resetGrid() { document.getElementById('grid').innerHTML = ''; state.loadedIds.clear(); loadData(); }
+        function showToast(msg) { const el=document.getElementById('toast'); document.getElementById('toast-msg').innerText=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000); }
+
+        async function loadData() {
+            if(state.loading) return; state.loading = true; if (state.page > 1) document.getElementById('loading').classList.remove('opacity-0');
+            try {
+                let items = [];
+                if(state.mode === 'trending') {
+                    try {
+                        const controller = new AbortController();
+                        const id = setTimeout(() => controller.abort(), 1500); 
+                        const res = await fetch(`https://api.trakt.tv/${state.type === 'movie' ? 'movies' : 'shows'}/trending?page=${state.page}&limit=15`, { headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': TRAKT_CLIENT_ID, 'Authorization': `Bearer ${Trakt.token}` }, signal: controller.signal });
+                        clearTimeout(id);
+                        if(!res.ok) throw new Error('Trakt Error');
+                        const traktData = await res.json();
+                        items = await Promise.all(traktData.map(t => fetch(`${BASE_URL}/${state.type}/${(t.movie||t.show).ids.tmdb}?api_key=${API_KEY}&language=zh-CN`).then(r=>r.json()).catch(()=>null)));
+                    } catch(e) {
+                        const fallbackUrl = `${BASE_URL}/discover/${state.type}?api_key=${API_KEY}&language=zh-CN&sort_by=popularity.desc&page=${state.page}`;
+                        const fbRes = await fetch(fallbackUrl);
+                        items = (await fbRes.json()).results;
+                    }
+                } else {
+                    const provider = PROVIDERS.find(p => p.id === state.provider);
+                    const url = provider.id === 'chinese' ? `${BASE_URL}/discover/${state.type}?api_key=${API_KEY}&language=zh-CN&sort_by=popularity.desc&with_original_language=zh&page=${state.page}` : `${BASE_URL}/discover/${state.type}?api_key=${API_KEY}&language=zh-CN&sort_by=popularity.desc&with_watch_providers=${provider.pid}&watch_region=US&page=${state.page}`;
+                    const res = await fetch(url);
+                    items = (await res.json()).results;
+                }
+                const grid = document.getElementById('grid');
+                if(!items) items = [];
+                items.forEach((item, idx) => {
+                    if(!item || !item.poster_path) return;
+                    if (state.loadedIds.has(item.id)) return;
+                    state.loadedIds.add(item.id);
+                    const el = document.createElement('div');
+                    el.className = 'aspect-[2/3] rounded-xl overflow-hidden bg-white/10 opacity-0 transform translate-y-6 transition-all duration-700 cursor-pointer relative';
+                    el.style.transitionDelay = `${idx * 40}ms`;
+                    const targetType = state.type; 
+                    el.onclick = () => openDetail(item.id, item.poster_path, item.backdrop_path, targetType);
+                    el.innerHTML = `<img src="${CARD_URL + item.poster_path}" class="w-full h-full object-cover" loading="lazy" decoding="async" alt=""><div class="grid-item-title theme-light-only">${item.title || item.name}</div>`;
+                    grid.appendChild(el);
+                    setTimeout(() => { el.classList.remove('opacity-0', 'translate-y-6'); }, 50);
+                });
+                state.page++;
+            } catch(e) { console.error(e); }
+            state.loading = false; document.getElementById('loading').classList.add('opacity-0');
+        }
+    </script>
+</body>
+</html>
