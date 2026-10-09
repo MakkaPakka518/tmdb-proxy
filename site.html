@@ -297,10 +297,23 @@
         // 全站禁用：两指缩放(pinch)、双击放大、右键菜单、长按选择（含详情页/所有 overlay）
         (function(){
             document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('dblclick', e => e.preventDefault());
             document.addEventListener('gesturestart', e => e.preventDefault());
             document.addEventListener('gesturechange', e => e.preventDefault());
             document.addEventListener('gestureend', e => e.preventDefault());
             document.addEventListener('touchmove', e => { if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
+            // 阻止双击放大（iOS/Android）：350ms 内同位置第二次点击则拦截
+            let _lastTapT=0, _lastTapX=0, _lastTapY=0;
+            document.addEventListener('touchend', e => {
+                if(e.touches.length > 0) return;
+                const t = e.changedTouches && e.changedTouches[0];
+                const now = Date.now();
+                if(t && now-_lastTapT<350 && Math.abs(t.clientX-_lastTapX)<40 && Math.abs(t.clientY-_lastTapY)<40){
+                    e.preventDefault();
+                }
+                _lastTapT=now;
+                if(t){ _lastTapX=t.clientX; _lastTapY=t.clientY; }
+            }, {passive:false});
         })();
 
         const PROVIDERS = [
