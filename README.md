@@ -9,7 +9,7 @@
 - 请求路径 + query 原样转发到 `api.themoviedb.org`，行为与官方 API 完全一致
 - 支持 GET / HEAD / POST
 - 自动附带 CORS 头，浏览器端（Rex / fw 网页等）可跨域调用
-- 支持两种传 Key 方式：客户端自带 `api_key`，或 Worker 环境变量自动注入
+- 传 Key 方式：**默认由客户端自带 `api_key`**（Rex 等直接填 Key 即可，Worker 无需配置）；`TMDB_API_KEY` 环境变量自动注入为**选做**项（仅当客户端不方便带 Key 时用）
 - 零依赖，单文件
 
 ## 部署
@@ -20,7 +20,9 @@
 2. 把本仓库的 `worker.js` 内容整体粘贴进代码编辑器，保存并部署
 3. 记下生成的域名，例如 `https://tmdb-proxy.xxx.workers.dev`
 
-可选：到 Worker → 设置 → 变量，添加环境变量 `TMDB_API_KEY = 你的Key`，之后客户端无需再带 `api_key`。
+**默认无需任何配置**：客户端（Rex / fw / curl）直接在请求里带 `api_key` 即可，Worker 原样转发给 TMDB，完全兼容。
+
+**选做**：若你不想在客户端填 Key，可到 Worker → 设置 → 变量，添加环境变量 `TMDB_API_KEY = 你的Key`，由 Worker 在客户端没带 Key 时自动注入。
 
 ### 方式二：Wrangler CLI
 
@@ -63,13 +65,13 @@ https://tmdb.<你的域名>.com
 
 ## 使用
 
-和直接调 TMDB 官方 API 完全一样，只是把域名换成你的 Worker 域名：
+和直接调 TMDB 官方 API 完全一样，只是把域名换成你的 Worker 域名。**默认客户端带 `api_key`，Worker 无需配 Key 变量**：
 
 ```bash
-# 客户端自带 key
+# 客户端自带 key（默认方式，最推荐）
 curl "https://tmdb-proxy.xxx.workers.dev/3/search/movie?api_key=你的KEY&language=zh-CN&query=spy%20x%20family"
 
-# 若已配置 TMDB_API_KEY 环境变量，则无需带 key
+# 选做：仅在 Worker 配了 TMDB_API_KEY 环境变量时，客户端可不带 key
 curl "https://tmdb-proxy.xxx.workers.dev/3/search/tv?language=zh-CN&query=%E5%86%B0%E4%B9%8B%E5%9F%8E%E5%A2%99"
 ```
 
@@ -98,7 +100,7 @@ Rex 等观影应用支持「自定义 TMDB API」，把它的 API 地址指向�
 然后点 **测试连接并保存**。
 
 > ⚠️ API 地址**不要带 `/3`**（Rex 会自动拼 `/3/...`，和原来填 `https://api.themoviedb.org` 保持一致，只换域名即可）。
-> 如果 Worker 环境变量里已配 `TMDB_API_KEY` 且 Rex 允许 Key 留空，API Key 一项也可留空，由 Worker 自动注入。
+> 默认**兼容客户端填 Key**：Rex 里填的 API Key 会被原样转发给 TMDB，Worker 无需配任何变量。Worker 的 `TMDB_API_KEY` 环境变量是**选做**项，仅当你不想在客户端填 Key 时才需要配置。
 
 保存后，Rex 里所有带 TMDB id 的条目（AniList / MAL / 榜单等）的详情与海报解析都会走你的 Worker。
 
