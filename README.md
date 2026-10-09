@@ -51,32 +51,18 @@ wrangler deploy
 
 ## 绑定自定义域名（推荐）
 
-默认 `xxx.workers.dev` 域名在部分地区（含大陆）访问不稳定，建议绑定一个自己的域名。
+默认 `xxx.workers.dev` 域名在部分地区（含大陆）访问不稳定，建议绑定一个自己的域名（此方法比直接 CNAME 到 workers.dev 更快更稳）。
 
-### 前提
-你的域名 DNS 托管在 Cloudflare（免费版即可）。
+前提：你的域名 DNS 托管在 Cloudflare（免费版即可）。
 
-### 方式一：Worker 自带「自定义域」功能（最简单）
+按下面几步：
 
-1. 打开 Worker → 设置 → **域和路由** → **添加自定义域**（Add custom domain）
-2. 输入你想用的子域，例如 `tmdb.<你的域名>.com`
-3. Cloudflare 会自动在该域名的 DNS 里创建一条 CNAME 记录指向你的 Worker，并自动签发 HTTPS 证书，等状态变为 **Active** 即可
+1. Worker 详情 → **设置** → **域和路由**
+2. 点击 **添加自定义域**，选择你已接入 Cloudflare 的域名并指定子域，把路由的 `*.你的域名/*` 改成 `自定义前缀.你的域名/*` 这种格式，例如：`tmdb.example.com/*`
+3. 到 Cloudflare **域名概览**，选择你刚添加到 Worker 的域名，点击 **DNS 记录**，添加一条 **CNAME 记录**：前缀填你刚刚自定义的前缀，**关闭小黄云**，目标填入 `saas.sin.fan`
+4. 完成后，你就可以通过自定义域名访问面板和反代地址了，例如 `https://tmdb.example.com`
 
-完成后你的访问地址就是：
-```
-https://tmdb.<你的域名>.com
-```
-
-### 方式二：手动加路由
-
-1. DNS 里新建一条记录（可先加 CNAME，`tmdb.<你的域名>.com` → `tmdb-proxy.<你的账号>.workers.dev`，代理状态开启 ⚡）
-2. Worker → 设置 → 域和路由 → 添加路由（Route），填写：
-   ```
-   tmdb.<你的域名>.com/*
-   ```
-3. 等待证书生效（通常几十秒~几分钟）
-
-> 提示：自定义域名比 `workers.dev` 域名在国内被墙的概率更低、也更稳定，手机端 Rex/fw 走自定义域名体验更好。
+> 提示：自定义域名比 `workers.dev` 域名在国内被墙的概率更低、访问更快，手机端 Rex/fw 走自定义域名体验更好。
 
 ## 使用
 
