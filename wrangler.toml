@@ -2,7 +2,15 @@ name = "tmdb-proxy"
 main = "worker.js"
 compatibility_date = "2025-09-01"
 
-# 可选：把 TMDB API Key 放在这里自动注入，客户端就不用在 query 里带 key 了。
-# 也支持在 Cloudflare 面板的 Worker -> 设置 -> 变量 里添加同名环境变量。
+# 转发记录面板（/web）需要 KV 存储。【选做】
+# 不配置 KV 完全不影响 TMDB 反代功能，只是 /web 面板没有转发记录（页面会提示"未配置 KV"）。
+# 如需启用记录：先在 Cloudflare 控制台创建 KV 命名空间，名称务必叫 TMDB_LOG，
+# 然后绑定到本 Worker（命名空间 ID 替换下方 id）。
+# [[kv_namespaces]]
+# binding = "TMDB_LOG"
+# id = "你的 KV 命名空间 ID"
+
+# 选做：把 TMDB API Key 放在这里自动注入，客户端就不用在 query 里带 key 了。
+# 不配置则完全依赖客户端自带的 api_key（默认推荐方式）。
 # [vars]
 # TMDB_API_KEY = "你的TMDB API Key"
